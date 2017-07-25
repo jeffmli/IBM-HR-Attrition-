@@ -1,0 +1,177 @@
+---
+title: "HR Attrition Exploratory Data Analyiss"
+output: html_notebook
+---
+
+Loading the dataset
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+library(grid)
+
+hr = read.csv('HR_Employee_Attrition.csv')
+dim(hr)
+names(hr)
+```
+So about 35 columns, 1470 rows. The dependent variable will likely be "attrition" with everything else being the x - predictors. Let's explore the data a bit at first with a few questions:
+
+- What are the summary statistics for attrition? On average, how long does it take for someone to leave the company? What's the distribution of this dependent variable look like?
+- How do we define attrition? What metric are we using to measure this? 
+- From my own intuition, which predictor variables do I think will have the highest prediction power, so I can test?
+- Which variables are correlated with each other? 
+- What are some qualitative predictor variables? What's does the distribution for these qualitative look like? Could there be subjective error there?
+
+```{r}
+summary(hr$Attrition)
+```
+```{r}
+head(hr, 10)
+```
+Note: 
+- To build the model, I'm gonna need to replace these categorical variables with dummy variables. 
+- The class is fairly imbalanced so I'll need to keep this in mind when I go into the modeling stage. 
+
+Let's look at multi-collinearity to see how related these quantitative variables are, so we have a solid first guess on which variables to test: 
+```{r}
+install.packages("pheatmap")
+install.packages("RColorBrewer")
+install.packages("viridis")
+```
+```{r}
+library(pheatmap)
+library(RColorBrewer)
+library(viridis)
+names(hr)
+str(hr)
+
+group_col = c('Age','DailyRate','DistanceFromHome','Education','EmployeeCount','EmployeeNumber','EnvironmentSatisfaction','JobInvolvement','JobLevel','JobSatisfaction','MonthlyIncome','MonthlyRate','NumCompaniesWorked','PercentSalaryHike','PerformanceRating','RelationshipSatisfaction','StandardHours','StockOptionLevel','TotalWorkingYears','TrainingTimesLastYear','WorkLifeBalance','YearsAtCompany','YearsInCurrentRole','YearsSinceLastPromotion','YearsWithCurrManager')
+
+quant_var = hr[group_col]
+
+
+
+pheatmap(
+  mat               = quant_var,
+  color             = inferno(10),
+  border_color      = NA,
+  show_colnames     = FALSE,
+  show_rownames     = FALSE,
+  #annotation_col    = mat_col,
+  #annotation_colors = mat_colors,
+  drop_levels       = TRUE,
+  fontsize          = 14,
+  main              = "Default Heatmap"
+)
+
+install.packages('ggplot2')
+
+library('ggplot2')
+library('reshape2')
+
+cor_matrix = cor(quant_var)
+
+melted_cormat = melt(cor_matrix)
+
+ggplot(data = melted_cormat,aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+```
+
+So it looks like the only four with a good amount of multi-collinearity is the "YearsWith" 4 categories. 
+
+```{r}
+head(hr)
+summary(hr$Attrition)
+
+names(hr)
+```
+
+```{r}
+head(hr)
+
+# Split dataset between employees turned over vs. employees still there
+turned_over = subset(hr,Attrition == 'Yes')
+incumbent = subset(hr, Attrition == 'No' )
+
+p1 = ggplot(data = turned_over, aes(x = Age)) + 
+  geom_histogram(binwidth = 1)
+
+p2 = ggplot(data = incumbent, aes(x = Age)) + 
+  geom_histogram(binwidth = 1)
+
+grid.arrange(p1, p2)
+
+
+
+```
+```{r}
+summary(turned_over$Age)
+
+summary(incumbent$Age)
+```
+So it looks like on average, employees who stay tend to be older while employees who are younger tend to leave. 
+
+```{r}
+names(hr)
+
+by(hr$JobLevel, hr$Attrition, summary)
+
+ggplot(aes(x = hr$JobLevel), data = hr) + 
+  geom_histogram(bins = 5)
+```
+Notes: It looks like most employees are at a lower joblevel, which makes sense, however, it looks like those who are at a lower job level are more likely to leave, my guess, is that it's because they're not getting promoted. 
+
+```{r}
+names(hr)
+by(hr$PercentSalaryHike, hr$Attrition, summary)
+
+p1 = ggplot(data = hr, aes(y = PercentSalaryHike, x = Attrition)) + 
+  geom_boxplot() + 
+  ggtitle("Percent Salary vs. Attrition")
+
+p1
+
+```
+```{r}
+names(hr)
+
+hr$PerformanceRating
+
+ggplot(data = hr, aes(x = PerformanceRating)) +
+  geom_histogram(binwidth=0.5)
+```
+We can see that a majority of people get a rating of 3, while only a select few get a rating of 4. Let's look at the Performance Rating distribution from turned over employees versus non-turnover.
+
+```{r}
+ggplot(data = turned_over, aes(x = PerformanceRating)) +
+  geom_histogram(binwidth=0.5)
+```
+
+```{r}
+ggplot(data = incumbent, aes(x = PerformanceRating)) +
+  geom_histogram(binwidth=0.5)
+
+hr$Gender
+```
+You can see that there doesn't seem to be a big difference. 
+
+```{r}
+by(hr$Attrition,hr$Gender, summary)
+
+```
+Interesting. Looks men have about 3% higher turnover than women. Could there be a gender behavioral difference? 
+```{r}
+87/501
+150/732
+```
+Let's look at business areas/departments now.
+```{r}
+
+hr$Attrition = as.numeric(factor(hr$Attrition, levels = c('Yes','No'))) 
+
+aggregate(hr, by = list(hr$Department), FUN = mean)
+
+hr$Attrition
+
+```
+
